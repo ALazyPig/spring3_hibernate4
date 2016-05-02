@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xmlns:aop="http://www.springframework.org/schema/aop"
+     xmlns:context="http://www.springframework.org/schema/context"
+     xmlns:tx="http://www.springframework.org/schema/tx"
+     xsi:schemaLocation="http://www.springframework.org/schema/beans
+         http://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/context
+         http://www.springframework.org/schema/context/spring-context.xsd
+         http://www.springframework.org/schema/tx
+    	 http://www.springframework.org/schema/tx/spring-tx.xsd
+         http://www.springframework.org/schema/aop 
+         http://www.springframework.org/schema/aop/spring-aop.xsd" default-autowire="byName">
+	<context:annotation-config></context:annotation-config>
+	
+	<bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+  		<property name="locations" value="classpath:jdbc.properties"/>
+	</bean>	
+	<!-- 
+		使用<bean id="dataSource" class="org.springframework.jdbc.datasource.SingleConnectionDataSource">
+		需加上<property name="suppressClose" value="true"/>，否则一直报错：cannot open connection 
+	-->
+	<bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="${jdbc.driverClassName}"/>
+        <property name="url" value="${jdbc.url}"/>
+        <property name="username" value="${jdbc.username}"/>
+        <property name="password" value="${jdbc.password}"/>
+    </bean>
+    <bean id="sessionFactory" class="org.springframework.orm.hibernate4.LocalSessionFactoryBean">
+    	<property name="dataSource" ref="dataSource"/>
+	    <!-- 说明哪些类是实体类 -->
+	    <property name="annotatedClasses">            
+	      <list>			<!-- 数组类型相当于list类型 -->
+	        <value>com.zhaojun.spring.model.UserModel</value>
+	      </list>
+	    </property>
+	    <property name="hibernateProperties">
+		 	<props>
+		      <prop key="dialect">org.hibernate.dialect.Oracle10gDialect</prop>
+		      <prop key="show_sql">true</prop>
+		      <prop key="cache.provider_class">org.hibernate.cache.internal.NoCacheProvider</prop>
+ 			</props>
+	    </property>
+	</bean>
+	<bean id="userDao" class="com.zhaojun.spring.daoImpl.UserDaoImpl"/>	
+	<bean id="transactionManager" class="org.springframework.orm.hibernate4.HibernateTransactionManager">
+ 		<property name="sessionFactory" ref="sessionFactory"/>
+ 	</bean>
+ 	<aop:config>
+ 	<!-- 当设成execution(public * *(..))时，会报错。读取该xml文件是在运行main方法之后，故不能在在该main方法之前添加添加切点 -->
+    	<aop:pointcut id="productServiceMethods" expression="execution(* save*(..))"/><!-- 只是在满足该表达式的地方加入切点，切点处做什么动作由后面的逻辑决定 -->
+  		<aop:advisor advice-ref="txAdvice" pointcut-ref="productServiceMethods"/>
+	</aop:config>
+	<tx:advice id="txAdvice" transaction-manager="transactionManager">
+		<tx:attributes>
+    		<tx:method name="save*" propagation="REQUIRED"/><!-- 在满足前面的切点上的save方法加入动作 。若当前没有事务，则开启事务。。。-->
+    		<tx:method name="*" propagation="REQUIRED"/>
+  		</tx:attributes>
+	</tx:advice>
+	
+	<bean id="logInterceptor" class="com.zhaojun.spring.aop.LogInterceptor"/>
+	<aop:config>
+		<aop:pointcut expression="execution(public * com.zhaojun.spring.daoImpl.UserDaoImpl.save(..))" id="servicePointcut"/>
+		<aop:aspect id="logAspect" ref="logInterceptor">
+			<aop:before method="init" pointcut-ref="servicePointcut"/>
+		</aop:aspect>
+	</aop:config>
+	
+</beans>
